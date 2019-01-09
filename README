@@ -3,6 +3,20 @@ st - simple terminal
 st is a simple terminal emulator for X which sucks less.
 
 
+Changes from upstream
+---------------------
+
+* Some patches are pre-applied
+	* st-alpha: https://st.suckless.org/patches/alpha/
+	* st-scrollback: https://st.suckless.org/patches/scrollback/
+		* including st-scrollback-mouse and st-scrollback-altscreen
+* Some state is saved, and new st instances apply that state
+	* Currently, only the zoom level is saved
+* And of course, config.h is changed to fit my preferences
+	* Color scheme is changed
+	* The window's background is partially transparent
+	* A bunch of shortcuts are changed
+
 Requirements
 ------------
 In order to build st you need the Xlib header files.
