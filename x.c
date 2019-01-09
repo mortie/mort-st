@@ -191,9 +191,9 @@ static void usage(void);
 
 static char *
 statedir() {
-	char *cache_dir = NULL;
+	char *state_dir = NULL;
 
-	if (cache_dir == NULL) {
+	if (state_dir == NULL) {
 		char *cache_home = getenv("XDG_CACHE_HOME");
 		if (cache_home == NULL) {
 			char *home = getenv("HOME");
@@ -204,21 +204,21 @@ statedir() {
 				return NULL;
 			}
 
-			cache_dir = xmalloc(strlen(home) + 32);
-			sprintf(cache_dir, "%s/.cache/st", home);
+			state_dir = xmalloc(strlen(home) + 32);
+			sprintf(state_dir, "%s/.cache/st", home);
 		} else {
-			cache_dir = xmalloc(strlen(cache_home) + 8);
-			sprintf(cache_dir, "%s/st", cache_home);
+			state_dir = xmalloc(strlen(cache_home) + 8);
+			sprintf(state_dir, "%s/st", cache_home);
 		}
 	}
 
-	if (mkdir(cache_dir, 0755) < 0 && errno != EEXIST) {
-		perror(cache_dir);
-		free(cache_dir);
+	if (mkdir(state_dir, 0755) < 0 && errno != EEXIST) {
+		perror(state_dir);
+		free(state_dir);
 		return NULL;
 	}
 
-	return cache_dir;
+	return state_dir;
 }
 
 static char *
@@ -307,7 +307,7 @@ writestate_int(char *name, int num) {
 
 static void
 state_read_all() {
-	{ // zoom cache
+	{ // zoom state
 		int zoom;
 		readstate_int("zoom-level", &zoom, -1);
 		if (zoom != -1) {
