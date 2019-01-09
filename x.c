@@ -138,6 +138,14 @@ typedef struct {
 	GC gc;
 } DC;
 
+static char *statedir();
+static char *stateent(char *);
+static void readstate(char *, char *, size_t, char *);
+static void readstate_int(char *, int *, int);
+static void writestate(char *, char *, size_t);
+static void writestate_int(char *, int);
+static void state_read_all();
+
 static inline ushort sixd_to_16bit(int);
 static int xmakeglyphfontspecs(XftGlyphFontSpec *, const Glyph *, int, int, int);
 static void xdrawglyphfontspecs(const XftGlyphFontSpec *, Glyph, int, int, int);
@@ -180,6 +188,135 @@ static int match(uint, uint);
 
 static void run(void);
 static void usage(void);
+
+static char *
+statedir() {
+	char *cache_dir = NULL;
+
+	if (cache_dir == NULL) {
+		char *cache_home = getenv("XDG_CACHE_HOME");
+		if (cache_home == NULL) {
+			char *home = getenv("HOME");
+			if (home == NULL) {
+				fprintf(stderr,
+					"Warning: reading conf fails because "
+					"neither $XDG_CACHE_HOME nor $HOME is set.\n");
+				return NULL;
+			}
+
+			cache_dir = xmalloc(strlen(home) + 32);
+			sprintf(cache_dir, "%s/.cache/st", home);
+		} else {
+			cache_dir = xmalloc(strlen(cache_home) + 8);
+			sprintf(cache_dir, "%s/st", cache_home);
+		}
+	}
+
+	if (mkdir(cache_dir, 0755) < 0 && errno != EEXIST) {
+		perror(cache_dir);
+		free(cache_dir);
+		return NULL;
+	}
+
+	return cache_dir;
+}
+
+static char *
+stateent(char *name) {
+	static int inited = 0;
+	static char *cd = NULL;
+	static size_t cd_len = 0;
+	static char *path_buf = NULL;
+
+	if (!inited) {
+		cd = statedir();
+		cd_len = cd ? strlen(cd) : 0;
+		path_buf = cd ? xmalloc(cd_len + 64) : NULL;
+		inited = 1;
+	}
+
+	if (path_buf == NULL)
+		return NULL;
+
+	sprintf(path_buf, "%s/%s", cd, name);
+	return path_buf;
+}
+
+static void
+readstate(char *name, char *buf, size_t buf_len, char *dflt) {
+	char *path = stateent(name);
+
+	FILE *f = fopen(path, "r");
+	if (f == NULL) {
+		strncpy(buf, dflt, buf_len);
+		buf[buf_len - 1] = '\0';
+		if (errno != ENOENT) {
+			perror(path);
+		}
+		return;
+	}
+
+	size_t ret = fread(buf, 1, buf_len - 1, f);
+	buf[ret] = '\0';
+
+	if (ferror(f)) {
+		strncpy(buf, dflt, buf_len);
+		buf[buf_len - 1] = '\0';
+		perror(path);
+	}
+
+	fclose(f);
+}
+
+static void
+readstate_int(char *name, int *num, int dflt) {
+	char buf[32];
+	readstate(name, buf, sizeof(buf), "");
+	if (buf[0] == '\0') {
+		*num = dflt;
+		return;
+	}
+
+	*num = atoi(buf);
+}
+
+static void
+writestate(char *name, char *buf, size_t buf_len) {
+	char *path = stateent(name);
+
+	FILE *f = fopen(path, "w");
+	if (f == NULL) {
+		perror(path);
+		return;
+	}
+
+	size_t ret = fwrite(buf, 1, buf_len, f);
+	if (ferror(f)) {
+		perror(path);
+	}
+
+	fclose(f);
+}
+
+static void
+writestate_int(char *name, int num) {
+	char buf[32];
+	int ret = snprintf(buf, sizeof(buf), "%d", num);
+	writestate(name, buf, ret);
+}
+
+static void
+state_read_all() {
+	{ // zoom cache
+		int zoom;
+		readstate_int("zoom-level", &zoom, -1);
+		if (zoom != -1) {
+			Arg larg;
+			larg.f = zoom;
+			zoomabs(&larg);
+		}
+	}
+}
 
 static void (*handler[LASTEvent])(XEvent *) = {
 	[KeyPress] = kpress,
@@ -300,6 +437,8 @@ zoomabs(const Arg *arg)
 	cresize(0, 0);
 	redraw();
 	xhints();
+
+	writestate_int("zoom-level", arg->f);
 }
 
 void
@@ -1837,6 +1976,8 @@ run(void)
 	int ttyfd;
 	struct timespec drawtimeout, *tv = NULL, now, last, lastblink;
 	long deltatime;
+
+	state_read_all();
 
 	/* Waiting for window mapping */
 	do {
